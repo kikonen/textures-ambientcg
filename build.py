@@ -172,12 +172,20 @@ def download_images(catalog_data, options):
             continue
         print(entry["zip_url"])
 
+        category_path = ORIGINAL_IMAGES_PATH / entry["category"]
+        category_path.mkdir(exist_ok=True)
+
+        file_path = category_path / entry["zip_url"].split("/")[-1]
+
+        if file_path.exists():
+            print(f"EXIST: {file_path}")
+            continue
+
+        print(f"LOAD: {file_path}")
+
         zip_file_response = requests.get(entry["zip_url"])
 
-        filename = ORIGINAL_IMAGES_PATH / entry["zip_url"].split("/")[-1]
-        print(f"FILE: {filename}")
-
-        with open(filename, "wb") as f:
+        with open(file_path, "wb") as f:
             f.write(zip_file_response.content)
 
 def build_readme(catalog_data, version):

@@ -174,88 +174,11 @@ def download_images(catalog_data, options):
 
         zip_file_response = requests.get(entry["zip_url"])
 
-        with zipfile.ZipFile(BytesIO(zip_file_response.content)) as thezip:
-            color_file_info = next(
-                filter(
-                    lambda zipinfo: zipinfo.filename == entry["in_zip_jpg_filename"],
-                    thezip.infolist(),
-                ),
-                None,
-            )
+        filename = ORIGINAL_IMAGES_PATH / entry["zip_url"].split("/")[-1]
+        print(f"FILE: {filename}")
 
-            with thezip.open(color_file_info) as thefile:
-                with open(dest_path, "wb") as f:
-                    f.write(thefile.read())
-
-
-def get_resized_image_path(size):
-    image_path = RESIZED_IMAGE_BASE_PATH.with_name(f"{RESIZED_IMAGE_BASE_PATH}_{size}")
-    image_path.mkdir(exist_ok=True)
-    return image_path
-
-
-def resize_image(original_image_path, size=256):
-    """
-    Resize given image to fit in given box
-    """
-    image_path = get_resized_image_path(size) / original_image_path.name
-
-    if image_path.exists():
-        return
-    print(f"Resize {size} {original_image_path}")
-    image = Image.open(original_image_path)
-    resized_image = ImageOps.contain(image, (size, size))
-    resized_image.save(image_path)
-
-
-def resize_images(catalog_data):
-    """
-    Parralellized image resize to fit in given box
-    """
-    image_files = [
-        ORIGINAL_IMAGES_PATH / entry["image_filename"] for entry in catalog_data
-    ]
-    for size in SIZES:
-        with multiprocessing.Pool() as p:
-            p.map(partial(resize_image, size=size), image_files)
-
-
-def write_catalog_file(catalog_data, version):
-    """
-    Write PluginTexturesCatalog.properties file from given catalog data
-    """
-    content = Path("catalog_header.txt").read_text().format(version=version)
-    for index, entry in enumerate(catalog_data):
-        entry_content = "\n".join(
-            f"{key}#{index+1}={value}" for key, value in entry["catalog_infos"].items()
-        )
-        content += entry_content + "\n\n"
-    CATALOG_FILE_PATH.write_text(content)
-
-def get_package_path(size):
-    return SH3T_PACKAGE_BASE_PATH.with_stem(SH3T_PACKAGE_BASE_PATH.stem + f"_{size}")
-
-def __package_size__(catalog_data, size):
-    sh3t_file_path = get_package_path(size)
-    print(f"Build package {sh3t_file_path}")
-    if sh3t_file_path.exists():
-        sh3t_file_path.unlink()
-
-    with zipfile.ZipFile(sh3t_file_path, "w", compression = zipfile.ZIP_DEFLATED) as zip_object:
-        zip_object.write(CATALOG_FILE_PATH)
-        for entry in catalog_data:
-            zip_object.write(
-                get_resized_image_path(size) / entry["image_filename"],
-                f"{IN_ZIP_IMAGE_PATH}/{entry['image_filename']}",
-            )
-
-def package_lib(catalog_data):
-    """
-    Create .sh3t (zip file) for each size
-    """
-    with multiprocessing.Pool() as p:
-        p.map(partial(__package_size__, catalog_data), SIZES)
-
+        with open(filename, "wb") as f:
+            f.write(zip_file_response.content)
 
 def build_readme(catalog_data, version):
     print("Build README.md")
@@ -279,10 +202,6 @@ def build_texture_lib(options):
     catalog_data = fetch_catalog_data(options)
     version = get_version(options)
     download_images(catalog_data, options)
-    resize_images(catalog_data)
-    write_catalog_file(catalog_data, version)
-    package_lib(catalog_data)
-    make_preview(catalog_data)
     build_readme(catalog_data, version)
     write_version(version)
 

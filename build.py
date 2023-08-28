@@ -65,7 +65,7 @@ def check_file(zip_content, endswith_strings):
     return None
 
 
-def get_asset_zip_url(asset, type, exitASAP, quality=1):
+def get_asset_zip_url(asset, image_type, exitASAP, quality=1):
     """
     From JSON "asset" data return zip file Url and image to retrieve
     Search for lesser quality possible and for xxx_Color.png or xxx_var1.png file
@@ -74,8 +74,8 @@ def get_asset_zip_url(asset, type, exitASAP, quality=1):
         "zip"
     ]["downloads"]
 
-    type_attribute = f"{quality}K-{type}"
-    type_ext = type.lower()
+    type_attribute = f"{quality}K-{image_type}"
+    type_ext = image_type.lower()
 
     for download in downloads:
         if download["attribute"] == type_attribute:
@@ -89,7 +89,7 @@ def get_asset_zip_url(asset, type, exitASAP, quality=1):
                 return download["fullDownloadPath"], image_filename
 
     if quality < 8:
-        return get_asset_zip_url(asset, type, exitASAP, quality + 1)
+        return get_asset_zip_url(asset, image_type, exitASAP, quality + 1)
 
     if exitASAP:
         print ("------------------------------------------------------------")
@@ -100,14 +100,11 @@ def get_asset_zip_url(asset, type, exitASAP, quality=1):
     return None, None
 
 
-def get_asset_data(asset):
+def get_asset_data(asset, image_type):
     """
     From JSON asset return dict containing SH3D texture catalog data
     """
-    zip_url, color_filename = get_asset_zip_url(asset, "PNG", False)
-
-    if not zip_url:
-        zip_url, color_filename = get_asset_zip_url(asset, "JPG", True)
+    zip_url, color_filename = get_asset_zip_url(asset, image_type, False)
 
     if not zip_url:
         raise Exception("No zip url found")
@@ -133,7 +130,7 @@ def get_asset_data(asset):
     }
 
 
-def fetch_catalog_data(options):
+def fetch_catalog_data(options, image_type):
     """
     Fetch remote JSON of all material assets and return list of data required to
     download images and to build calalog
@@ -166,7 +163,7 @@ def fetch_catalog_data(options):
             print(asset["assetId"])
             try:
                 # with ipdb.launch_ipdb_on_exception():
-                catalog_data.append(get_asset_data(asset))
+                catalog_data.append(get_asset_data(asset, image_type))
             except Exception as e:
                 print(f"ERROR: {e}")
 
@@ -205,14 +202,22 @@ def download_images(catalog_data, options):
         with open(file_path, "wb") as f:
             f.write(zip_file_response.content)
 
-def build_texture_lib(options):
-    catalog_data = fetch_catalog_data(options)
+def fetch_image_type(options, image_type):
+    catalog_data = fetch_catalog_data(options, image_type)
     version = get_version(options)
     download_images(catalog_data, options)
     write_version(version)
 
+def build_texture_lib(options):
+    if options.fetch_jpg:
+        fetch_image_type(options, "JPG")
+    if options.fetch_png:
+        fetch_image_type(options, "PNG")
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
+    parser.add_argument("--fetch-jpg", action="store_true")
+    parser.add_argument("--fetch-png", action="store_true")
     parser.add_argument("--no-json-cache", action="store_true")
     parser.add_argument("--no-image-cache", action="store_true")
     parser.add_argument("--no-version", action="store_true")

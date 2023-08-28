@@ -9,6 +9,7 @@ from io import BytesIO
 from itertools import product
 from pathlib import Path
 
+import json
 import requests
 import requests_cache
 from jinja2 import Environment, FileSystemLoader, select_autoescape
@@ -67,22 +68,40 @@ def check_file(zip_content, endswith_strings):
 def get_asset_zip_url(asset, quality=1):
     """
     From JSON "asset" data return zip file Url and image to retrieve
-    Search for lesser quality possible and for xxx_Color.jpg or xxx_var1.jpg file
+    Search for lesser quality possible and for xxx_Color.png or xxx_var1.png file
     """
     downloads = asset["downloadFolders"]["default"]["downloadFiletypeCategories"][
         "zip"
     ]["downloads"]
-    attribute = f"{quality}K-JPG"
+
+    png_attribute = f"{quality}K-PNG"
+    jpg_attribute = f"{quality}K-JPG"
+
     for download in downloads:
-        if download["attribute"] == attribute:
+        if download["attribute"] == png_attribute:
+            png_filename = check_file(
+                download.get("zipContent", []),
+                ["Color.png", "Normal.png", "var1.png"]
+            )
+            if png_filename:
+                return download["fullDownloadPath"], png_filename
+
+        if download["attribute"] == jpg_attribute:
             jpg_filename = check_file(
-                download.get("zipContent", []), ["Color.jpg", "var1.jpg"]
+                download.get("zipContent", []),
+                ["Color.jpg", "Normal.png", "Normal.jpg", "var1.jpg"]
             )
             if jpg_filename:
                 return download["fullDownloadPath"], jpg_filename
 
     if quality < 16:
         return get_asset_zip_url(asset, quality + 1)
+
+    print ("------------------------------------------------------------")
+    print('asset: %s', json.dumps(asset))
+    print(f"Quality {quality}");
+    exit()
+
     return None, None
 
 
@@ -90,7 +109,7 @@ def get_asset_data(asset):
     """
     From JSON asset return dict containing SH3D texture catalog data
     """
-    zip_url, jpg_filename = get_asset_zip_url(asset)
+    zip_url, color_filename = get_asset_zip_url(asset)
 
     if not zip_url:
         raise Exception("No zip url found")
@@ -111,7 +130,7 @@ def get_asset_data(asset):
         "assetId": asset["assetId"],
         "category": asset["category"],
         "zip_url": zip_url,
-        "in_zip_jpg_filename": jpg_filename,
+        "in_zip_color_filename": color_filename,
         "image_filename": f"{asset['assetId']}.jpg",
     }
 
@@ -188,31 +207,11 @@ def download_images(catalog_data, options):
         with open(file_path, "wb") as f:
             f.write(zip_file_response.content)
 
-def build_readme(catalog_data, version):
-    print("Build README.md")
-    env = Environment(loader=FileSystemLoader("."), autoescape=select_autoescape())
-    template = env.get_template("README.jinja")
-    git_tag = f"v{version}"
-    preview_categories = sorted(list(set(entry['category'] for entry in catalog_data)))
-    Path('README.md').write_text(template.render(
-        download_base_url = f"https://github.com/fabien-michel/sweethome3d-textures-ambientcg/raw/{git_tag}",
-        preview_base_url = f"https://raw.githubusercontent.com/fabien-michel/sweethome3d-textures-ambientcg/{git_tag}/previews",
-        version = version,
-        catalog_data = catalog_data,
-        git_tag = git_tag,
-        preview_categories = preview_categories,
-        download_versions = [(get_package_path(size), DOWNLOAD_URLS[size]) for size in SIZES],
-    ))
-
-
-
 def build_texture_lib(options):
     catalog_data = fetch_catalog_data(options)
     version = get_version(options)
     download_images(catalog_data, options)
-    build_readme(catalog_data, version)
     write_version(version)
-
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

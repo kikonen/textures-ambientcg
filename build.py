@@ -65,7 +65,7 @@ def check_file(zip_content, endswith_strings):
     return None
 
 
-def get_asset_zip_url(asset, quality=1):
+def get_asset_zip_url(asset, type, exitASAP, quality=1):
     """
     From JSON "asset" data return zip file Url and image to retrieve
     Search for lesser quality possible and for xxx_Color.png or xxx_var1.png file
@@ -74,33 +74,28 @@ def get_asset_zip_url(asset, quality=1):
         "zip"
     ]["downloads"]
 
-    png_attribute = f"{quality}K-PNG"
-    jpg_attribute = f"{quality}K-JPG"
+    type_attribute = f"{quality}K-{type}"
+    type_ext = type.lower()
 
     for download in downloads:
-        if download["attribute"] == png_attribute:
-            png_filename = check_file(
+        if download["attribute"] == type_attribute:
+            image_names = [f"Color.{type_ext}", f"Normal.{type_ext}", "Normal.png", f"var1.{type_ext}"]
+            #print("check: %s", json.dumps(image_names))
+            image_filename = check_file(
                 download.get("zipContent", []),
-                ["Color.png", "Normal.png", "var1.png"]
+                image_names
             )
-            if png_filename:
-                return download["fullDownloadPath"], png_filename
+            if image_filename:
+                return download["fullDownloadPath"], image_filename
 
-        if download["attribute"] == jpg_attribute:
-            jpg_filename = check_file(
-                download.get("zipContent", []),
-                ["Color.jpg", "Normal.png", "Normal.jpg", "var1.jpg"]
-            )
-            if jpg_filename:
-                return download["fullDownloadPath"], jpg_filename
+    if quality < 8:
+        return get_asset_zip_url(asset, type, exitASAP, quality + 1)
 
-    if quality < 16:
-        return get_asset_zip_url(asset, quality + 1)
-
-    print ("------------------------------------------------------------")
-    print('asset: %s', json.dumps(asset))
-    print(f"Quality {quality}");
-    exit()
+    if exitASAP:
+        print ("------------------------------------------------------------")
+        print('asset: %s', json.dumps(asset))
+        print(f"Quality {quality}");
+        exit()
 
     return None, None
 
@@ -109,7 +104,10 @@ def get_asset_data(asset):
     """
     From JSON asset return dict containing SH3D texture catalog data
     """
-    zip_url, color_filename = get_asset_zip_url(asset)
+    zip_url, color_filename = get_asset_zip_url(asset, "PNG", False)
+
+    if not zip_url:
+        zip_url, color_filename = get_asset_zip_url(asset, "JPG", True)
 
     if not zip_url:
         raise Exception("No zip url found")

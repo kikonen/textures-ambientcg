@@ -74,7 +74,8 @@ def get_asset_zip_url(asset, image_type, ignore_missing, quality):
         "zip"
     ]["downloads"]
 
-    type_attribute = f"{quality}K-{image_type}"
+    type_attr_ext = image_type.upper()
+    type_attribute = f"{quality}K-{type_attr_ext}"
     type_ext = image_type.lower()
 
     for download in downloads:

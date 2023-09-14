@@ -210,12 +210,14 @@ def download_images(catalog_data, options):
         zip_file_response = requests.get(zip_url)
         zip_size = len(zip_file_response.content)
 
-        valid = True
+        file_header = zip_file_response.content[0:2].decode('utf-8')
+        #print(f"HEADER: {file_header}")
+        valid = file_header == 'PK'
+
         error_text = ''
         print(f"SIZE:  {zip_size}")
-        if zip_size < 1 * 1000 * 1000:
-            error_text = zip_file_response.text[0:20]
-            valid = error_text[0] == 'P' and error_text[1] == 'K'
+        if not valid:
+            error_text = str(zip_file_response.content[0:20])
 
         if valid:
             with open(file_path, "wb") as f:

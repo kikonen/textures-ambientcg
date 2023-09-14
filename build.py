@@ -18,6 +18,7 @@ from PIL import Image, ImageOps
 from excluded_categories import EXCLUDED_CATEGORIES
 from make_preview import make_preview
 
+import pdb
 
 SIZES = (1024, 512, 256)
 DOWNLOAD_URLS = {
@@ -81,21 +82,26 @@ def get_asset_zip_url(asset, image_type, ignore_missing, quality):
     for download in downloads:
         if download["attribute"] == type_attribute:
             image_names = [f"Color.{type_ext}", f"Normal.{type_ext}", "Normal.png", f"var1.{type_ext}"]
-            #print("check: %s", json.dumps(image_names))
+            #print("check: ", json.dumps(image_names))
             image_filename = check_file(
                 download.get("zipContent", []),
                 image_names
             )
             if image_filename:
-                return download["fullDownloadPath"], image_filename
+                #print('FOUND:', json.dumps(asset))
+                print('FOUND:', image_filename)
+                #print('FOUND:', download["downloadLink"])
+                #exit()
+                return download["downloadLink"], image_filename
 
     if quality < 16:
         return get_asset_zip_url(asset, image_type, ignore_missing, quality + 1)
 
     if not ignore_missing:
         print("------------------------------------------------------------")
-        print('MISSING: %s', json.dumps(asset))
+        print('MISSING:', json.dumps(asset))
         exit()
+        #raise Exception('MISSING')
 
     return None, None
 
@@ -185,26 +191,37 @@ def download_images(catalog_data, options):
     """
 
     for entry in catalog_data:
+        zip_url = entry["zip_url"]
         dest_path = ORIGINAL_IMAGES_PATH / entry["image_filename"]
-        if not options.no_image_cache and dest_path.exists():
-            continue
-        print(entry["zip_url"])
+        #if not options.no_image_cache and dest_path.exists():
+        #    continue
 
         category_path = ORIGINAL_IMAGES_PATH / entry["category"]
         category_path.mkdir(exist_ok=True)
 
-        file_path = category_path / entry["zip_url"].split("/")[-1]
+        file_path = category_path / zip_url.split("=")[-1]
 
-        if file_path.exists():
+        if not options.no_image_cache and file_path.exists():
             print(f"EXIST: {file_path}")
             continue
 
-        print(f"LOAD: {file_path}")
+        print(f"LOAD:  {file_path} - {zip_url}")
 
-        zip_file_response = requests.get(entry["zip_url"])
+        zip_file_response = requests.get(zip_url)
+        zip_size = len(zip_file_response.content)
 
-        with open(file_path, "wb") as f:
-            f.write(zip_file_response.content)
+        valid = True
+        error_text = ''
+        print(f"SIZE:  {zip_size}")
+        if zip_size < 1 * 1000 * 1000:
+            error_text = zip_file_response.text[0:20]
+            valid = error_text[0] == 'P' and error_text[1] == 'K'
+
+        if valid:
+            with open(file_path, "wb") as f:
+                f.write(zip_file_response.content)
+        else:
+            print(f"ERROR: {error_text}")
 
 def build_texture_lib(options):
     catalog_data = fetch_catalog_data(options)

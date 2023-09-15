@@ -272,8 +272,10 @@ def unzip_images(catalog_data, options):
 def build_texture_lib(options):
     catalog_data = fetch_catalog_data(options)
     version = get_version(options)
-    download_images(catalog_data, options)
-    unzip_images(catalog_data, options)
+    if options.download:
+        download_images(catalog_data, options)
+    if options.unzip:
+        unzip_images(catalog_data, options)
     write_version(version)
 
 if __name__ == "__main__":
@@ -284,5 +286,7 @@ if __name__ == "__main__":
     parser.add_argument("--no-json-cache", action="store_true")
     parser.add_argument("--no-image-cache", action="store_true")
     parser.add_argument("--no-version", action="store_true")
+    parser.add_argument("--download", action="store_true")
+    parser.add_argument("--unzip", action="store_true")
     options = parser.parse_args()
     build_texture_lib(options)

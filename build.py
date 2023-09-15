@@ -19,6 +19,8 @@ from PIL import Image, ImageOps
 from excluded_categories import EXCLUDED_CATEGORIES
 from make_preview import make_preview
 
+import re
+import os
 import pdb
 
 SIZES = (1024, 512, 256)
@@ -32,6 +34,7 @@ TOTAL_LIMIT = None
 JSON_BATCH_SIZE = 100
 BASE_URL = "https://ambientcg.com/api/v2/full_json"
 ORIGINAL_IMAGES_PATH = Path("ambientcg_originals")
+TEXTURES_PATH = Path("ambientcg_textures")
 RESIZED_IMAGE_BASE_PATH = Path("ambientcg")
 IN_ZIP_IMAGE_PATH = "ambientcg"
 SH3T_PACKAGE_BASE_PATH = Path("ambientcg.sh3t")
@@ -39,6 +42,8 @@ CATALOG_FILE_PATH = Path("PluginTexturesCatalog.properties")
 PYPROJECT_PATH = Path("pyproject.toml")
 
 ORIGINAL_IMAGES_PATH.mkdir(exist_ok=True)
+
+TEXTURES_PATH.mkdir(exist_ok=True)
 
 def get_version(options):
     """
@@ -237,10 +242,38 @@ def download_images(catalog_data, options):
                time.sleep(5)
                retry += 1
 
+def unzip_image(category_path, src_path, zip_file_path, options):
+    print("SRC:", src_path)
+    print("ZIP:", zip_file_path)
+
+    category_dst_path = TEXTURES_PATH / category_path
+    category_dst_path.mkdir(exist_ok=True)
+
+    texture_path = re.sub("\.zip", "", zip_file_path)
+    dst_path = category_dst_path / texture_path
+    print("DST:", dst_path)
+
+    dst_path.mkdir(exist_ok=True)
+
+    with zipfile.ZipFile(src_path) as zip:
+        zip.extractall(dst_path)
+
+def unzip_images(catalog_data, options):
+    category_paths = os.listdir(ORIGINAL_IMAGES_PATH)
+
+    for category_path in sorted(category_paths):
+        category_src_path = ORIGINAL_IMAGES_PATH / category_path
+        zip_file_paths = os.listdir(category_src_path)
+
+        for zip_file_path in sorted(zip_file_paths):
+            src_path = category_src_path / zip_file_path
+            unzip_image(category_path, src_path, zip_file_path, options)
+
 def build_texture_lib(options):
     catalog_data = fetch_catalog_data(options)
     version = get_version(options)
     download_images(catalog_data, options)
+    unzip_images(catalog_data, options)
     write_version(version)
 
 if __name__ == "__main__":

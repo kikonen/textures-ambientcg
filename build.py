@@ -2,6 +2,7 @@ import argparse
 from datetime import timedelta
 import multiprocessing
 from time import strftime
+import time
 import tomlkit
 import zipfile
 from functools import partial
@@ -185,45 +186,56 @@ def fetch_catalog_data(options):
     return sorted(catalog_data, key=lambda entry: entry["assetId"])
 
 
+def download_image(entry, options):
+    zip_url = entry["zip_url"]
+    dest_path = ORIGINAL_IMAGES_PATH / entry["image_filename"]
+    #if not options.no_image_cache and dest_path.exists():
+    #    continue
+
+    category_path = ORIGINAL_IMAGES_PATH / entry["category"]
+    category_path.mkdir(exist_ok=True)
+
+    file_path = category_path / zip_url.split("=")[-1]
+
+    if not options.no_image_cache and file_path.exists():
+        print(f"EXIST: {file_path}")
+        return False
+
+    print(f"LOAD:  {file_path} - {zip_url}")
+
+    zip_file_response = requests.get(zip_url)
+    zip_size = len(zip_file_response.content)
+
+    print(f"SIZE:  {zip_size}")
+
+    file_header = zip_file_response.content[0:2].decode('utf-8')
+    #print(f"HEADER: {file_header}")
+    valid = file_header == 'PK'
+
+    if not valid:
+        error_text = str(zip_file_response.content[0:20])
+        raise Exception(error_text)
+
+    with open(file_path, "wb") as f:
+        f.write(zip_file_response.content)
+
+    return True
+
 def download_images(catalog_data, options):
     """
     Download all zip and extract images from given metadata
     """
 
     for entry in catalog_data:
-        zip_url = entry["zip_url"]
-        dest_path = ORIGINAL_IMAGES_PATH / entry["image_filename"]
-        #if not options.no_image_cache and dest_path.exists():
-        #    continue
-
-        category_path = ORIGINAL_IMAGES_PATH / entry["category"]
-        category_path.mkdir(exist_ok=True)
-
-        file_path = category_path / zip_url.split("=")[-1]
-
-        if not options.no_image_cache and file_path.exists():
-            print(f"EXIST: {file_path}")
-            continue
-
-        print(f"LOAD:  {file_path} - {zip_url}")
-
-        zip_file_response = requests.get(zip_url)
-        zip_size = len(zip_file_response.content)
-
-        file_header = zip_file_response.content[0:2].decode('utf-8')
-        #print(f"HEADER: {file_header}")
-        valid = file_header == 'PK'
-
-        error_text = ''
-        print(f"SIZE:  {zip_size}")
-        if not valid:
-            error_text = str(zip_file_response.content[0:20])
-
-        if valid:
-            with open(file_path, "wb") as f:
-                f.write(zip_file_response.content)
-        else:
-            print(f"ERROR: {error_text}")
+        retry = 0
+        while retry < 2:
+            try:
+                result = download_image(entry, options)
+                retry = 2
+            except Exception as e:
+               print(f"ERROR: {e}")
+               time.sleep(5)
+               retry += 1
 
 def build_texture_lib(options):
     catalog_data = fetch_catalog_data(options)
